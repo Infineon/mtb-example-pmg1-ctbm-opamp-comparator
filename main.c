@@ -7,7 +7,7 @@
 * Related Document: See README.md
 *
 *******************************************************************************
-* Copyright 2022, Cypress Semiconductor Corporation (an Infineon company) or
+* Copyright 2022-2023, Cypress Semiconductor Corporation (an Infineon company) or
 * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
 *
 * This software, including source code, documentation and related
@@ -46,12 +46,52 @@
 #include "cybsp.h"
 #include "cy_pdl.h"
 #include "stdio.h"
-
+#include <inttypes.h>
 
 /*******************************************************************************
 * Macros
 *******************************************************************************/
 #define CY_ASSERT_FAILED            (0u)
+
+/* Debug print macro to enable the UART print */
+#define DEBUG_PRINT                 (0u)
+
+#if DEBUG_PRINT
+
+/* Structure for UART context */
+cy_stc_scb_uart_context_t UART_context;
+
+/* Variable used for tracking the print status */
+volatile bool ENTER_LOOP = true;
+
+/*******************************************************************************
+* Function Name: check_status
+********************************************************************************
+* Summary:
+*  Prints the error message.
+*
+* Parameters:
+*  error_msg - message to print if any error encountered.
+*  status - status obtained after evaluation.
+*
+* Return:
+*  void
+*
+*******************************************************************************/
+void check_status(char *message, cy_rslt_t status)
+{
+    char error_msg[50];
+
+    sprintf(error_msg, "Error Code: 0x%08" PRIX32 "\n", status);
+
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, "\r\n=====================================================\r\n");
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, "\nFAIL: ");
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, message);
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, "\r\n");
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, error_msg);
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, "\r\n=====================================================\r\n");
+}
+#endif
 
 /*******************************************************************************
 * Function Name: main
@@ -71,6 +111,7 @@
 int main(void)
 {
     cy_rslt_t result;
+    cy_en_ctb_status_t ctb_result;
 
     /* Initialize the device and board peripherals */
     result = cybsp_init();
@@ -81,25 +122,46 @@ int main(void)
         CY_ASSERT(CY_ASSERT_FAILED);
     }
 
-    /* Initialize PASS 0 CTB 0 OpAmp 1 under CTBm block */
-    cy_en_ctb_status_t status = Cy_CTB_OpampInit(CTBM0, CY_CTB_OPAMP_1, &CYBSP_CTB0_OPAMP1_config); /* SAR ADC initialization */
+#if DEBUG_PRINT
 
-    if (CY_CTB_SUCCESS != status)
+    /* Configure and enable the UART peripheral */
+    Cy_SCB_UART_Init(CYBSP_UART_HW, &CYBSP_UART_config, &UART_context);
+    Cy_SCB_UART_Enable(CYBSP_UART_HW);
+
+    /* Sequence to clear screen */
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, "\x1b[2J\x1b[;H");
+
+    /* Print "CTBm opamp comparator" */
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, "****************** ");
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, "PMG1 MCU: CTBm opamp comparator");
+    Cy_SCB_UART_PutString(CYBSP_UART_HW, "****************** \r\n\n");
+#endif
+
+    /* Initialize PASS 0 CTB 0 OpAmp 1 under CTBm block */
+    ctb_result = Cy_CTB_OpampInit(CTBM0, CY_CTB_OPAMP_1, &CYBSP_CTB0_OPAMP1_config); /* SAR ADC initialization */
+    if (ctb_result != CY_CTB_SUCCESS)
     {
+#if DEBUG_PRINT
+    check_status("API Cy_CTB_OpampInit failed with error code", ctb_result);
+#endif
         /* Insert error handling here */
         CY_ASSERT(CY_ASSERT_FAILED);
     }
-
-    if (CY_CTB_SUCCESS == status)
+    else
     {
         /* Continuous Time Block mini (CTBm) enabling */
         Cy_CTB_Enable(CTBM0);
     }
 
-
     for(;;)
     {
-
+#if DEBUG_PRINT
+        if (ENTER_LOOP)
+        {
+            Cy_SCB_UART_PutString(CYBSP_UART_HW, "Entered for loop \r\n");
+            ENTER_LOOP = false;
+        }
+#endif
     }
 
 }
